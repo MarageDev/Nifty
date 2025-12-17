@@ -65,7 +65,8 @@ The notebook saves the results in ./results/
 ## Reproducibility
 For reproducibility, all expermients are seeded in experiments.ipynb.\
 Additionally, seeded inference are provided in reproducible_inference.ipynb, allowing to reproduce figures and tables in the article.\
-The results of these seeded runs are provided in .zip files under ./comparison/ , you can either run the notebook or unzip the files.\
+The results of these seeded runs are provided in .zip files under ./comparison/synthesimetrics.zip , you can either run the notebook or unzip the files.\
+Some inference require training a network. The weights are provided under ./comparison/modelmetrics.zip. Either way, the training phase is seeded and can be reproduced.\
 After recomputing or unzipping, you can compute the metrics from Table 1 by running:
 ```
 python Nifty/metrics.py
