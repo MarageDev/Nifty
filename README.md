@@ -73,7 +73,7 @@ python Nifty/metrics.py
 ```
 
 ## Acknowledgments
-This  work  was  partly  funded  by  the  Normandy  Region  through  theIArtist excellence label project.
+This  work  was  partly  funded  by  the  Normandy  Region  through  the IArtist excellence label project.
 
 ## Citation
 If you use this code for your research, please cite our paper:
