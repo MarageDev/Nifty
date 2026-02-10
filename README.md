@@ -76,10 +76,18 @@ python Nifty/metrics.py
 This  work  was  partly  funded  by  the  Normandy  Region  through  the IArtist excellence label project.
 
 ## Citation
-If you use this code for your research, please cite our paper:
+If you use this code for your research, please cite our paper, ICASSP 2026 citation will be updated after publication:
 
 ```
-
+@misc{NIFTY,
+      title={NIFTY: a Non-Local Image Flow Matching for Texture Synthesis}, 
+      author={Pierrick Chatillon and Julien Rabin and David Tschumperlé},
+      year={2025},
+      eprint={2509.22318},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2509.22318}, 
+}
 ```
 
 ## License
