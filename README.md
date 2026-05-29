@@ -79,15 +79,21 @@ This  work  was  partly  funded  by  the  Normandy  Region  through  the IArtist
 If you use this code for your research, please cite our paper, ICASSP 2026 citation will be updated after publication:
 
 ```
-@misc{NIFTY,
-      title={NIFTY: a Non-Local Image Flow Matching for Texture Synthesis}, 
-      author={Pierrick Chatillon and Julien Rabin and David Tschumperlé},
-      year={2025},
-      eprint={2509.22318},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2509.22318}, 
+@inproceedings{NIFTY,
+  TITLE = {{NIFTY: a Non-Local Image Flow Matching for Texture Synthesis}},
+  AUTHOR = {Chatillon, Pierrick and Rabin, Julien and Tschumperl{\'e}, David},
+  URL = {https://hal.science/hal-05287967},
+  BOOKTITLE = {{ICASSP}},
+  ADDRESS = {Barcelona, Spain},
+  YEAR = {2026},
+  MONTH = May,
+  DOI = {10.48550/arXiv.2509.22318},
+  KEYWORDS = {Machine Learning (cs.LG) ; Computer Vision and Pattern Recognition (cs.CV) ; Flow Matching ; Texture synthesis ; Image synthesis ; Generative model},
+  PDF = {https://hal.science/hal-05287967v1/file/2509.22318v1.pdf},
+  HAL_ID = {hal-05287967},
+  HAL_VERSION = {v1},
 }
+
 ```
 
 ## License
