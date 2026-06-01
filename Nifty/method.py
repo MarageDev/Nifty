@@ -11,11 +11,14 @@ from PIL import Image
 from torch import nn
 
 
-if torch.cuda.is_available():
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
-    device = torch.device('cuda:0')
-else :
-    device = torch.device('cpu')
+def manually_select_device(try_gpu=True):
+    if torch.cuda.is_available() and try_gpu:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
+        return torch.device('cuda:0')
+    else:
+        return torch.device('cpu')
+
+device = manually_select_device()
 
 
 
