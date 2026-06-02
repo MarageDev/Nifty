@@ -105,6 +105,13 @@ def update_output_display_mode(debug_mode_enabled:bool):
     display_debug_mode = debug_mode_enabled
 # CSS
 custom_css = """
+.full_height {height: -webkit-fill-available !important;}
+.full_width {width: -webkit-fill-available !important;}
+.filled_flex_display {display: flex !important; align-content: stretch; justify-content: space-between;}
+.filled_flex_display > div{display: grid !important; align-content: stretch; align-items: stretch; justify-items: stretch; flex-grow: 1 !important;}
+
+
+
 #title{
     font-size: 48px; 
     font-weight: 700; 
@@ -176,16 +183,9 @@ with gr.Blocks(title="Nifty") as nifty_demo:
     # Inputs and outputs
     with gr.Row():
         # Input column
-        with gr.Column(scale=1):
-            in_img1 = gr.Image(
-                label="Input Image",
-                value="results/red_peppers.jpg",
-                type="filepath",
-                width=256,
-                height=256 
-            ) 
-            with gr.Blocks():
-                with gr.Row():
+        with gr.Column(scale=1, elem_classes="full_height"):
+            with gr.Row(scale=1, elem_classes="full_height"):
+                with gr.Column(scale=1, elem_classes="full_height filled_flex_display"):
                     in_compressed_height = gr.Slider(
                         minimum=64,
                         maximum=2048,
@@ -202,8 +202,50 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                         label="Width",
                         info="Input image width in pixels once resized"
                     )
-                in_resize_button = gr.Button("Resize", variant="secondary")
-            in_rs = gr.Slider(
+                    in_resize_button = gr.Button("Resize", variant="secondary")
+                with gr.Column(scale=1, elem_classes="full_height"):
+                    in_img1 = gr.Image(
+                        label="Input Image",
+                        value="results/red_peppers.jpg",
+                        type="filepath",
+                        width=256,
+                        height=256,
+                        elem_classes="full_height full_width"
+                    ) 
+                # Output column
+        
+        with gr.Column(scale=1, elem_classes="full_height"):
+            with gr.Row(scale=1, elem_classes="full_height"):
+                # The ImageSlider displays the synthesized image on the left (or not if not in debug mode) and the novel areas on the right
+                with gr.Column(scale=1, elem_classes="full_height"):
+                    out_img = gr.ImageSlider(
+                        label="Output",
+                        elem_id="output_image_slider",
+                        elem_classes="full_height full_width"
+                    )
+                with gr.Column(scale=1, elem_classes="full_height filled_flex_display"):
+                    in_height = gr.Slider(
+                        minimum=64,
+                        maximum=2048,
+                        value=512,
+                        step=64,
+                        label="Height",
+                        info="Output image height in pixels"
+                    )
+                    in_width = gr.Slider(
+                        minimum=64,
+                        maximum=2048,
+                        value=512,
+                        step=64,
+                        label="Width",
+                        info="Output image width in pixels"
+                    )     
+                    submit_btn = gr.Button("Generate", variant="primary")
+        
+
+    
+    with gr.Row():
+        in_rs = gr.Slider(
                 minimum=0.,
                 maximum=1.,
                 value=1., 
@@ -211,65 +253,39 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                 label="Ratio Sample",
                 info="Ratio of the reference patches to sample at each step"
                 )
-            in_T = gr.Slider(
-                minimum=0.,
-                maximum=100.,
-                value=50., # A vérifier, c'était marqué 50 (mais marqué entre 0 et 1)
-                step=0.,
-                label="Discretization steps",
-                info="Number of (linear) distretization steps between 0 and 1 to solve the flow ODE"
-                )
-            in_k = gr.Slider(
-                minimum=0.,
-                maximum=50.,
-                value=5.,
-                step=0.,
-                label="K Neighbors",
-                info="Number of top closest patch used to approximate the velocity field"
-                )
-            in_octaves = gr.Slider(
-                minimum=0.,
-                maximum=20.,
-                value=4.,
-                step=1.,
-                label="Octaves",
-                info="Number of diadic scales used for the synthesis"
-                )
-            in_renoise = gr.Slider(
-                minimum=0.,
-                maximum=1.,
-                value=0.3,
-                step=0.01,
-                label="Renoise",
-                info="Time used renoise the smooth upsampled image at each resolution"
-                )
-        
-        # Output column
-        
-        with gr.Column(scale=1):
-            # The ImageSlider displays the synthesized image on the left (or not if not in debug mode) and the novel areas on the right
-            out_img = gr.ImageSlider(
-                label="Output",
-                elem_id="output_image_slider"
-                )
-            
-            with gr.Row():
-                in_height = gr.Slider(
-                    minimum=64,
-                    maximum=2048,
-                    value=512,
-                    step=64,
-                    label="Height",
-                    info="Output image height in pixels"
-                )
-                in_width = gr.Slider(
-                    minimum=64,
-                    maximum=2048,
-                    value=512,
-                    step=64,
-                    label="Width",
-                    info="Output image width in pixels"
-                )
+        in_T = gr.Slider(
+            minimum=0.,
+            maximum=100.,
+            value=50., # A vérifier, c'était marqué 50 (mais marqué entre 0 et 1)
+            step=0.,
+            label="Discretization steps",
+            info="Number of (linear) distretization steps between 0 and 1 to solve the flow ODE"
+            )
+        in_k = gr.Slider(
+            minimum=0.,
+            maximum=50.,
+            value=5.,
+            step=0.,
+            label="K Neighbors",
+            info="Number of top closest patch used to approximate the velocity field"
+            )
+        in_octaves = gr.Slider(
+            minimum=0.,
+            maximum=20.,
+            value=4.,
+            step=1.,
+            label="Octaves",
+            info="Number of diadic scales used for the synthesis"
+            )
+        in_renoise = gr.Slider(
+            minimum=0.,
+            maximum=1.,
+            value=0.3,
+            step=0.01,
+            label="Renoise",
+            info="Time used renoise the smooth upsampled image at each resolution"
+            )
+    
     
     # Blending inputs
     with gr.Accordion("Blending Inputs", open=False):
@@ -292,7 +308,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                 in_spot_size = gr.Slider(minimum=1/4, maximum=1, value=0.25, step=0.01, label="Spot Size", info="Size of the spots used for the synthesis, as a ratio of the patch size")
                 in_save = gr.Checkbox(value=False,label="Save", info="Save the synthesized image at the end of the synthesis")
     
-    submit_btn = gr.Button("Generate", variant="primary")
+    
 
     in_resize_button.click(
         fn = resize_input_image,
