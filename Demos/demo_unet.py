@@ -139,7 +139,6 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 				width=256,
 				height=256 
 			) 
-		
 		with gr.Column(scale=3, elem_id="input_general_settings"):
 			in_rs = gr.Slider(
 				minimum=0.,
@@ -201,14 +200,15 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 		with gr.Column(scale=1):
 			with gr.Tabs(elem_classes="full_height"):
 				with gr.Tab("Train Model", elem_id="train_tab"):
-					in_img_training = gr.Image(
+					with gr.Row():
+						in_img_training = gr.Image(
 						label="Input Image",
 						value="./results/red_peppers.jpg",
 						type="filepath",
-						elem_classes="full_size_image",
+						elem_classes="full_width",
 						elem_id="input_image_training",
-						width=256,
-						height=256 
+						width=270,
+						height=270 
 					) 
 					with gr.Row():
 						in_save_name = gr.Textbox(

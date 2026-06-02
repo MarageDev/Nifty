@@ -115,7 +115,10 @@ footer {visibility: hidden}
     margin:0;
     font-weight: 400;
 }
-
+.column{
+    height: -webkit-fill-available !important;
+    justify-content: space-between;
+}
 #authors{
     font-size: 15px; 
     color: #86868b; 
