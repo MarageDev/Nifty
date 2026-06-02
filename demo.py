@@ -7,13 +7,13 @@ from Nifty.method import *
 import time
 import os
 
-# For displaying the novelty map
+# For displaying the novelty map and other stuff
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
 import torch.nn as nn
 from tqdm import tqdm
 from PIL import Image
+
 import warnings; warnings.filterwarnings('ignore')
 
 # Functions
@@ -317,6 +317,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
          inputs=in_debug_mode,
     )
     gr.Examples(
+         label="Examples (Click to load the parameters) - Published in the paper and more",
           examples=[
                 ["results/red_peppers.jpg",None,1.,100,10,16,4,512,256,4,0.5,0,True,None,None,1/4,False,0.5,False,False,0], # Basic texture synthesis use
                 ["comparison/eval_base/7.png","comparison/eval_base/8.png",1.,50,10,16,4,256,256,3,0.5,0,True,None,None,1/4,True,0.5,False,False,0], # Pixel-level blending
@@ -337,6 +338,14 @@ with gr.Blocks(title="Nifty") as nifty_demo:
           ],
           inputs=[in_img1,in_img2,in_rs,in_T,in_k,in_patch_size,in_stride,in_width,in_height,in_octaves,in_renoise,in_warmup,in_memory,in_seed,in_noise,in_spot_size,in_blend,in_blend_alpha,in_save,in_blend_map, in_seed],
           )
-
+    
+    # Footer and links to the paper and code
+    gr.HTML("""
+        <div style="text-align: center; padding: 0px;;margin-top:30px;">
+            <a href="https://hal.science/hal-05287967">HAL</a>
+            <a href="https://github.com/PierrickCh/Nifty">Github</a>
+            <a href="https://arxiv.org/abs/2509.22318" >ArXiv</a>
+        </div>
+    """)
 # Run the Nifty demo
 nifty_demo.launch(head=custom_head,share=False, css=custom_css)
