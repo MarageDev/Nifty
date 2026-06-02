@@ -1,11 +1,15 @@
+import sys
+import os
+from pathlib import Path
+import time
+
+# Add parent directory to path for imports and file pathsto work from the Demos folder more easily
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
 import gradio as gr
 import Nifty.method as _nifty_method
 from Nifty.method import *
-#from Nifty.networks import *
-
-# For file management
-import time
-import os
 
 # For displaying the novelty map and other stuff
 import torch
@@ -16,30 +20,47 @@ from PIL import Image
 
 import warnings; warnings.filterwarnings('ignore')
 
+PYTORCH_CUDA_ALLOC_CONF=True 
+
 # Functions
 def Nifty_gradio_interface_complete(im1,im2=None,rs=1.,T=100,k=10,patchsize=16,stride=4,width=256,height=256,octaves=4,renoise=.5,warmup=0,memory=True,seed=None,noise=None,spotsize=1/4,blend=False,blend_alpha=0.5,save=True,blend_map=None, manual_noise_seed:int=0):
     torch.manual_seed(manual_noise_seed)
     img_1 = Tensor_load(im1)
     img_2 = Tensor_load(im2) if im2 is not None else None
     size = (height, width)
-    synth= Nifty(img_1,img_2,rs,T,k,patchsize,stride,size,octaves,renoise,warmup,False,memory,seed,None if noise == 0 else noise,spotsize,blend,blend_alpha,save, torch.tensor([[1,0]]).unsqueeze(0).unsqueeze(0).float().to(_nifty_method.device) if blend_map else None)
-    
-    if save:
-        out_path = save_img_to_path(f"./results/demo/synth_{os.path.basename(im1)}_{round(time.time())}.png",synth)
-    
-    img_synth = get_synthesized_image(synth)
-    
-    if display_debug_mode:
-        
-        # Calculate Novelty Map
-        P_exmpl = Patch_extraction(img_1, patchsize=patchsize, stride=1)
-        P_synth = Patch_extraction(synth, patchsize=patchsize, stride=1)
-        
-        dist_map, novel_areas = get_nn_distance_map_and_novel_areas(synth, P_exmpl, P_synth, patchsize, height, width)
-        
-        return (img_synth, novel_areas)
+    try:
+        synth= Nifty(img_1,img_2,rs,T,k,patchsize,stride,size,octaves,renoise,warmup,False,memory,seed,None if noise == 0 else noise,spotsize,blend,blend_alpha,save, torch.tensor([[1,0]]).unsqueeze(0).unsqueeze(0).float().to(_nifty_method.device) if blend_map else None)
 
-    return (img_synth, img_synth) # Return the synthesized image on both sides of the ImageSlider when not in debug mode, to keep the layout consistent with the debug mode (where we display the novelty map on the right side)
+        if save:
+            out_path = save_img_to_path(f"./results/demo/synth_{os.path.basename(im1)}_{round(time.time())}.png",synth)
+
+        img_synth = get_synthesized_image(synth)
+
+        if display_debug_mode:
+
+            # Calculate Novelty Map
+            P_exmpl = Patch_extraction(img_1, patchsize=patchsize, stride=1)
+            P_synth = Patch_extraction(synth, patchsize=patchsize, stride=1)
+
+            dist_map, novel_areas = get_nn_distance_map_and_novel_areas(synth, P_exmpl, P_synth, patchsize, height, width)
+
+            return (img_synth, novel_areas), gr.update(interactive=False)
+
+        return (img_synth, img_synth), gr.update(interactive=False)
+
+    # Retrieve out of memory errors and clear the cache to not crash + display the input image as output (to avoid crashing)
+    except RuntimeError as e:
+        msg = str(e).lower()
+        if "out of memory" in msg and "cuda" in msg:
+            clear_cuda_cache()
+            fallback_img = get_synthesized_image(img_1)
+            return (fallback_img, fallback_img), gr.update(interactive=True)
+        raise
+
+def clear_cuda_cache():
+    if "cuda" in str(_nifty_method.device):
+        torch.cuda.empty_cache()
+    return gr.update(interactive=False)
 
 def get_synthesized_image(synth):
     return (synth[0].permute(1, 2, 0).cpu().numpy() * .5 + .5).clip(0, 1).astype(np.float32)
@@ -103,69 +124,19 @@ def resize_input_image(image_path:str, width:int, height:int)->str:
 def update_output_display_mode(debug_mode_enabled:bool):
     global display_debug_mode
     display_debug_mode = debug_mode_enabled
-# CSS
-custom_css = """
-.full_height {height: -webkit-fill-available !important;}
-.full_width {width: -webkit-fill-available !important;}
-.filled_flex_display {display: flex !important; align-content: stretch; justify-content: space-between;}
-.filled_flex_display > div{display: grid !important; align-content: stretch; align-items: stretch; justify-items: stretch; flex-grow: 1 !important;}
-
-
-
-#title{
-    font-size: 48px; 
-    font-weight: 700; 
-    margin: 0; 
-    color: #ffffff; 
-    letter-spacing: -0.02em;
-}
-#subtitle{
-    font-size: 20px; 
-    color: #86868b; 
-    margin:0;
-    font-weight: 400;
-}
-#authors{
-    font-size: 15px; 
-    color: #86868b; 
-    margin:0;
-    font-style: italic;
-}
-.radio_group .wrap {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr;
-}
-footer {visibility: hidden}
-"""
-
-# Head
-custom_head = """
-<title>Nifty</title>
-<meta name="Nifty demo app" content="A non-local image flow matching for texture synthesis">
-"""
 
 # Initialize processing unit selection
 selected_processing_unit_type = "GPU" if "cuda" in str(_nifty_method.device) else "CPU"
 
 display_debug_mode = False
 
+
 # Interface
+from Demos.Utilities.theme import *
+
 with gr.Blocks(title="Nifty") as nifty_demo:
-    # Header and logo
-    gr.HTML("""
-            <header><a href="https://www.greyc.fr/"><img src="https://greycflix.greyc.fr/demo-portal/images/logo-GREYC-dark.svg" style="position: absolute; width: 12em;"></a></header>
-    """)
-    gr.HTML("""
-        <div style="text-align: center; padding: 0px;">
-            <h1 id="title">
-                NIFTY
-            </h1>
-            <p id="subtitle">
-                A NON-LOCAL IMAGE FLOW MATCHING FOR TEXTURE SYNTHESIS
-            </p>
-            <p id="authors">Pierrick Chatillon, Julien Rabin, David Tschumperlé</p>
-        </div>
-    """)
+    # Header
+    gr.HTML(HTML_LOGO_HEADER + HTML_HEADER + HTML_AUTHORS)
     
     # CPU or GPU selection
     with gr.Row():
@@ -178,10 +149,13 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                 elem_classes="radio_group",
                 elem_id="processing_unit_radio_group"
             )
+        with gr.Column(scale=1, elem_classes="filled_flex_display full_height"):
             in_debug_mode = gr.Checkbox(label="Debug Mode", value=False, info="Enable debug mode to display novelty areas on the output, which can help to understand and analyze the synthesis process, but can be slower and more memory consuming")
+            
+    gr.HTML(HTML_SEPARATOR)
     
     # Inputs and outputs
-    with gr.Row():
+    with gr.Row(elem_id="input_row"):
         # Input column
         with gr.Column(scale=1, elem_classes="full_height"):
             with gr.Row(scale=1, elem_classes="full_height"):
@@ -212,8 +186,8 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                         height=256,
                         elem_classes="full_height full_width"
                     ) 
-                # Output column
         
+        # Output column
         with gr.Column(scale=1, elem_classes="full_height"):
             with gr.Row(scale=1, elem_classes="full_height"):
                 # The ImageSlider displays the synthesized image on the left (or not if not in debug mode) and the novel areas on the right
@@ -241,9 +215,10 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                         info="Output image width in pixels"
                     )     
                     submit_btn = gr.Button("Generate", variant="primary")
-        
-
+                    in_clear_cache = gr.Button("Clear CUDA Cache", variant="stop", interactive=False)
     
+    gr.HTML(HTML_SEPARATOR)
+
     with gr.Row():
         in_rs = gr.Slider(
                 minimum=0.,
@@ -308,7 +283,11 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                 in_spot_size = gr.Slider(minimum=1/4, maximum=1, value=0.25, step=0.01, label="Spot Size", info="Size of the spots used for the synthesis, as a ratio of the patch size")
                 in_save = gr.Checkbox(value=False,label="Save", info="Save the synthesized image at the end of the synthesis")
     
-    
+    in_clear_cache.click(
+        fn=clear_cuda_cache,
+        inputs=[],
+        outputs=[in_clear_cache]
+    )
 
     in_resize_button.click(
         fn = resize_input_image,
@@ -320,7 +299,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
     submit_btn.click(
         fn=Nifty_gradio_interface_complete,
         inputs = [in_img1,in_img2,in_rs,in_T,in_k,in_patch_size,in_stride,in_width,in_height,in_octaves,in_renoise,in_warmup,in_memory,in_seed,in_noise,in_spot_size,in_blend,in_blend_alpha,in_save,in_blend_map, in_seed],
-        outputs = [out_img],
+        outputs = [out_img, in_clear_cache],
     )
 
     in_processing_unit_choice.input(
@@ -354,14 +333,8 @@ with gr.Blocks(title="Nifty") as nifty_demo:
           ],
           inputs=[in_img1,in_img2,in_rs,in_T,in_k,in_patch_size,in_stride,in_width,in_height,in_octaves,in_renoise,in_warmup,in_memory,in_seed,in_noise,in_spot_size,in_blend,in_blend_alpha,in_save,in_blend_map, in_seed],
           )
-    
-    # Footer and links to the paper and code
-    gr.HTML("""
-        <div style="text-align: center; padding: 0px;;margin-top:30px;">
-            <a href="https://hal.science/hal-05287967">HAL</a>
-            <a href="https://github.com/PierrickCh/Nifty">Github</a>
-            <a href="https://arxiv.org/abs/2509.22318" >ArXiv</a>
-        </div>
-    """)
+    gr.HTML(HTML_FOOTER)
+
 # Run the Nifty demo
-nifty_demo.launch(head=custom_head,share=False, css=custom_css)
+
+nifty_demo.launch(head=HTML_CUSTOM_HEAD,share=False, css=CUSTOM_CSS, theme=theme)

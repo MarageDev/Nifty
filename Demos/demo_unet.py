@@ -1,14 +1,21 @@
+import sys
+import os
+from pathlib import Path
+
+# Add parent directory to path for imports and file pathsto work from the Demos folder more easily
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from Nifty.method import *
 from Nifty.networks import *
 import warnings; warnings.filterwarnings('ignore')
 import gradio as gr
-import os
+
 
 seed = 0
 torch.manual_seed(seed)
 
 # Check for existing model at startup to handle UI button state
-MODEL_PATH = './training/UNet_peppers.pth'
+MODEL_PATH = "./training/UNet_peppers.pth"
 has_initial_model = os.path.exists(MODEL_PATH)
 
 def train_unet(img_path, save_path, progress=gr.Progress(track_tqdm=True)):
@@ -106,88 +113,18 @@ def update_pytorch_seed(input_seed):
     global seed
     seed = input_seed
 
-custom_css = """
-.full_size_image { 
-	margin: 0px !important;
-	width: 100% !important;
-	height: 100% !important;
-}
-#input_column{
-	height: -webkit-fill-available;
-}
-#title{
-	font-size: 48px; 
-	font-weight: 700; 
-	margin: 0; 
-	color: #ffffff; 
-	letter-spacing: -0.02em;
-}
-#subtitle{
-	font-size: 20px; 
-	color: #86868b; 
-	margin:0;
-	font-weight: 400;
-}
-#authors{
-	font-size: 15px; 
-	color: #86868b; 
-	margin:0;
-	font-style: italic;
-}
-
-#output_row{
-	height : 256px !important;
-}
-
-footer {visibility: hidden}
-
-.output_column {
-height: -webkit-fill-available;
-}
-#input_general_settings{
-	height: -webkit-fill-available;
-	justify-content: space-between;
-}
-.filled_column, .column{
-	height: -webkit-fill-available;
-	justify-content: space-between;
-}
-.full_height{
-	height: -webkit-fill-available;
-	justify-content: space-between;
-}
-
-.tabitem{
-	display:flex;
-	flex:auto;
-}
-.tabs{
-	display: flex;
-	flex-basis: content;
-	flex-direction: column;
-	flex-grow: inherit;
-}
-"""
-
 # Interface
+from Demos.Utilities.theme import *
+
 with gr.Blocks(title="Nifty") as nifty_demo:
 	# Header and logo
-	gr.HTML("""
-			<header><a href="https://www.greyc.fr/"><img src="https://greycflix.greyc.fr/demo-portal/images/logo-GREYC-dark.svg" style="position: absolute; width: 12em;"></a></header>
-	""")
-	gr.HTML("""
+	gr.HTML(HTML_LOGO_HEADER + HTML_HEADER + """
 		<div style="text-align: center; padding: 0px;">
-			<h1 id="title">
-				NIFTY
-			</h1>
 			<p id="subtitle">
-				A NON-LOCAL IMAGE FLOW MATCHING FOR TEXTURE SYNTHESIS
-				<br>
-			Compare Nifty approximation to U-Net approximation of the flow
+				Compare Nifty approximation to U-Net approximation of the flow
 			</p>
-			<p id="authors">Pierrick Chatillon, Julien Rabin, David Tschumperlé</p>
 		</div>
-	""")
+	""" + HTML_AUTHORS)
 	
 	# Inputs and outputs
 	with gr.Row():
@@ -195,7 +132,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 		with gr.Column(scale=1, elem_id="input_column"):
 			in_img1 = gr.Image(
 				label="Input Image",
-				value="assets/red_peppers.jpg",
+				value="./results/red_peppers.jpg",
 				type="filepath",
 				elem_classes="full_size_image",
 				elem_id="input_image",
@@ -260,13 +197,13 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 				with gr.Column(scale=1):
 					generate_btn_nifty = gr.Button("Generate Nifty", variant="primary")
 					cancel_btn_nifty = gr.Button("Cancel Nifty", variant="stop", visible=False)
-					
-		with gr.Column(scale=1, elem_classes="filled_column"):
+		with gr.Column(scale=1, elem_classes="full_height filled_flex_display shrink"): gr.HTML(HTML_V_SEPARATOR, elem_classes="full_height")			
+		with gr.Column(scale=1):
 			with gr.Tabs(elem_classes="full_height"):
 				with gr.Tab("Train Model", elem_id="train_tab"):
 					in_img_training = gr.Image(
 						label="Input Image",
-						value="assets/red_peppers.jpg",
+						value="./results/red_peppers.jpg",
 						type="filepath",
 						elem_classes="full_size_image",
 						elem_id="input_image_training",
@@ -285,7 +222,9 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 							train_btn_nn = gr.Button("Train NN", variant="primary")
 				with gr.Tab("Load Model", elem_id="load_tab"):
 					in_path_model = gr.File(elem_classes="full_size_image", file_count="single", file_types=[".pth"], label="Model file", value=MODEL_PATH if has_initial_model else None)
-     	
+    
+	gr.HTML(HTML_SEPARATOR)
+    
 	with gr.Row(elem_id="output_row"):  
 		with gr.Column(scale=1, elem_classes="output_column"):
 			out_img_nn = gr.Image(
@@ -384,6 +323,8 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 		cancels=[start_nifty],
 		queue=False
 	)
+ 
+	gr.HTML(HTML_FOOTER)
 
 # Run the Nifty demo (Queue is strictly required for generators/progress/cancel to work)
-nifty_demo.queue().launch(share=False, css=custom_css)
+nifty_demo.queue().launch(share=False, css=CUSTOM_CSS, theme=theme)
