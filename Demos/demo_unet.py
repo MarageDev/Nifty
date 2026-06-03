@@ -127,7 +127,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 	""" + HTML_AUTHORS)
 	
 	# Inputs and outputs
-	with gr.Row():
+	with gr.Row(equal_height=True):
 		# Input column
 		with gr.Column(scale=1, elem_id="input_column"):
 			in_img1 = gr.Image(
@@ -189,7 +189,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 				info="PyTorch manual seed"
 				)
 			
-			with gr.Row():
+			with gr.Row(equal_height=True):
 				with gr.Column(scale=1):
 					generate_btn_nn = gr.Button("Generate NN", variant="primary", interactive=has_initial_model)
 					cancel_btn_nn = gr.Button("Cancel NN", variant="stop", visible=False)
@@ -200,7 +200,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 		with gr.Column(scale=1):
 			with gr.Tabs(elem_classes="full_height"):
 				with gr.Tab("Train Model", elem_id="train_tab"):
-					with gr.Row():
+					with gr.Row(equal_height=True):
 						in_img_training = gr.Image(
 						label="Input Image",
 						value="./results/red_peppers.jpg",
@@ -210,22 +210,22 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 						width=270,
 						height=270 
 					) 
-					with gr.Row():
+					with gr.Row(equal_height=True):
 						in_save_name = gr.Textbox(
 							label="Save Path & Filename",
-							value="./training/UNet_peppers.pth",
-							placeholder="./training/your_model.pth"
+							value="",
+							placeholder="./training/MODEL_NAME.pth"
 						)
-					with gr.Row():
-							training_status = gr.Textbox(value="",label="Training Status")
-					with gr.Row():
+					with gr.Row(equal_height=True):
+							training_status = gr.Textbox(placeholder="Training status will appear here...",label="Training Status")
+					with gr.Row(equal_height=True):
 							train_btn_nn = gr.Button("Train NN", variant="primary")
 				with gr.Tab("Load Model", elem_id="load_tab"):
 					in_path_model = gr.File(elem_classes="full_size_image", file_count="single", file_types=[".pth"], label="Model file", value=MODEL_PATH if has_initial_model else None)
     
 	gr.HTML(HTML_SEPARATOR)
     
-	with gr.Row(elem_id="output_row"):  
+	with gr.Row(equal_height=True,elem_id="output_row"):  
 		with gr.Column(scale=1, elem_classes="output_column"):
 			out_img_nn = gr.Image(
 				label="NN Output",

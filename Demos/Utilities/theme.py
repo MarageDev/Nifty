@@ -91,15 +91,8 @@ HTML_AUTHORS = """
 """
 
 CUSTOM_CSS = """
-.full_height {height: -webkit-fill-available !important;}
-.full_width {width: -webkit-fill-available !important;}
-.filled_flex_display {display: flex !important; align-content: stretch; justify-content: space-between;}
-.filled_flex_display > div{display: grid !important; align-content: stretch; align-items: stretch; justify-items: stretch; flex-grow: 1 !important;}
-footer {visibility: hidden}
 
-#input_row{height: 300px !important;}
-#input_column{height: -webkit-fill-available;}
-#output_row{height : 256px !important;}
+footer {visibility: hidden}
 
 #title{
     font-size: 48px; 
@@ -114,10 +107,6 @@ footer {visibility: hidden}
     color: #86868b; 
     margin:0;
     font-weight: 400;
-}
-.column{
-    height: -webkit-fill-available !important;
-    justify-content: space-between;
 }
 #authors{
     font-size: 15px; 
@@ -152,12 +141,8 @@ footer {visibility: hidden}
     border-radius: 5px!important;
 }
 
-.shrink{
-    flex-shrink: 1 !important;
-    flex-grow: 0 !important;
-    min-inline-size: fit-content;
-    min-width: unset !important;
-}
+
+
 
 .tabitem{
 	display:flex;
@@ -169,6 +154,36 @@ footer {visibility: hidden}
 	flex-direction: column;
 	flex-grow: inherit;
 }
+
+.filled_flex_display {display: flex !important; align-content: stretch; justify-content: space-between;}
+.filled_flex_display > div{display: grid !important; align-content: stretch; align-items: stretch; justify-items: stretch; flex-grow: 1 !important;}
+.full_width {
+    width: -webkit-fill-available !important;
+    }
+
+
+.full_height {
+    height: -webkit-fill-available !important;
+    }
+
+.column{
+    justify-content: space-between;
+}
+
+
+/**#input_row{height: 300px !important;}**/
+/**#input_column{height: -webkit-fill-available;}**/
+/**#output_row{height : 256px !important;}**/
+
+
+.shrink{
+    flex-shrink: 1 !important;
+    flex-grow: 0 !important;
+    min-inline-size: fit-content;
+    min-width: unset !important;
+}
+
+
 .full_size_image { 
 	margin: 0px !important;
 	width: 100% !important;
@@ -181,5 +196,8 @@ height: -webkit-fill-available;
 #input_general_settings{
 	height: -webkit-fill-available;
 	justify-content: space-between;
+}
+[data-testid="imageslider-image"] {
+    max-block-size: -webkit-fill-available !important;
 }
 """

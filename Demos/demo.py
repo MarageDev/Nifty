@@ -39,11 +39,12 @@ def Nifty_gradio_interface_complete(im1,im2=None,rs=1.,T=100,k=10,patchsize=16,s
         if display_debug_mode:
 
             # Calculate Novelty Map
-            P_exmpl = Patch_extraction(img_1, patchsize=patchsize, stride=1)
+            P_exmpl_1 = Patch_extraction(img_1, patchsize=patchsize, stride=1)
+            P_exmpl_2 = Patch_extraction(img_2, patchsize=patchsize, stride=1) if img_2 is not None else None
             P_synth = Patch_extraction(synth, patchsize=patchsize, stride=1)
-
-            dist_map, novel_areas = get_nn_distance_map_and_novel_areas(synth, P_exmpl, P_synth, patchsize, height, width)
-
+            
+            dist_map, novel_areas = get_nn_distance_map_and_novel_areas(synth, P_exmpl_1, P_exmpl_2, P_synth, patchsize, height, width)
+           
             return (img_synth, novel_areas), gr.update(interactive=False)
 
         return (img_synth, img_synth), gr.update(interactive=False)
@@ -65,34 +66,35 @@ def clear_cuda_cache():
 def get_synthesized_image(synth):
     return (synth[0].permute(1, 2, 0).cpu().numpy() * .5 + .5).clip(0, 1).astype(np.float32)
 
-def get_nn_distance_map_and_novel_areas(synth, P_exmpl, P_synth, patchsize, H, W):
+def get_nn_distance_map_and_novel_areas(synth, P_exmpl1,P_exmpl2, P_synth, patchsize, H, W):
     N = P_synth.size(2)
-    ld = []
-    lind = []
-    for i in tqdm(range(N//5000+1)): # chunk by chunk for NN search, for memory
+    ld, lind = [], []
+    
+    for i in tqdm(range(N//5000+1)): # chunk by chunk for NN search, for memor
 
-        X = P_exmpl[:,:,:] 
-        X = X.squeeze(0)
-        X2 = (X**2).sum(0).unsqueeze(0) 
+        X1 = P_exmpl1[:,:,:]
+        X1 = X1.squeeze(0)
+        
+        if P_exmpl2 is not None: # if there's a second reference image, concatenate its patches to the first one for the NN search
+            X2 = P_exmpl2[:,:,:]
+            X2 = X2.squeeze(0)
+            X1 = torch.cat([X1,X2],dim=1) # concatenate the patches from the two reference images, to search for nearest neighbors in both of them at the same time
+        
+        X1_2 = (X1**2).sum(0).unsqueeze(0)
+        
         Y = P_synth[:,:,5000*i:5000*(i+1)].squeeze(0)
+
         Y2 = (Y**2).sum(0).unsqueeze(0) 
-        D = Y2.transpose(1,0) - 2 * torch.matmul(Y.transpose(1,0),X) + X2 
-        Dnn,indnn=torch.min(D,dim=1) # indnn: index of nearest ref patch for each synth patch, and Dnn the distance
+        D = Y2.transpose(1,0) - 2 * torch.matmul(Y.transpose(1,0),X1) + X1_2 
+        Dnn,indnn=torch.min(D,dim=1)  # indnn: index of nearest ref patch for each synth patch (not used because no displacement map), and Dnn the distance
         ld.append(Dnn.cpu())
-        lind.append(indnn.cpu())
 
     Dnn=torch.cat(ld)
-    indnn=torch.cat(lind)
 
     P_dist=P_synth*0
     P_dist=P_dist.view(3,patchsize,patchsize,P_dist.shape[-1])[:1]*0.
     P_dist[0,patchsize//2,patchsize//2,:]=Dnn
     dist=nn.Fold((H,W), patchsize, dilation=1, padding=0, stride=1)(P_dist.view(patchsize**2,-1))
-
-    # Apply 'hot' colormap
-    dist_norm = dist.cpu()[0].numpy()
-    dist_norm = dist_norm / dist_norm.max()
-    dist_map = plt.cm.hot(dist_norm)[:, :, :3].astype(np.float32)
 
     # compute a mask
     cutoff=0.2
@@ -102,9 +104,13 @@ def get_nn_distance_map_and_novel_areas(synth, P_exmpl, P_synth, patchsize, H, W
 
     novelty=synth*mask
 
+
+
     novel_areas = (novelty[0].permute(1, 2, 0).cpu().numpy() * .5 + .5).clip(0, 1).astype(np.float32)
 
-    return dist_map, novel_areas
+
+    return [], novel_areas
+
 
 def save_img_to_path(file_path, synthetized_image)->str:    
     plt.imsave(file_path, get_synthesized_image(synthetized_image))
@@ -139,7 +145,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
     gr.HTML(HTML_LOGO_HEADER + HTML_HEADER + HTML_AUTHORS)
     
     # CPU or GPU selection
-    with gr.Row():
+    with gr.Row(equal_height=True):
         with gr.Column(scale=1):
             in_processing_unit_choice = gr.Radio(
                 label="Mode",
@@ -149,17 +155,17 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                 elem_classes="radio_group",
                 elem_id="processing_unit_radio_group"
             )
-        with gr.Column(scale=1, elem_classes="filled_flex_display full_height"):
-            in_debug_mode = gr.Checkbox(label="Debug Mode", value=False, info="Enable debug mode to display novelty areas on the output, which can help to understand and analyze the synthesis process, but can be slower and more memory consuming")
+        with gr.Column(scale=1, elem_classes="filled_flex_display"):
+            in_debug_mode = gr.Checkbox(label="Debug Mode", value=False, info="Enable debug mode to display novelty areas on the output, which can help to understand and analyze the synthesis process, but is much slower and more memory consuming")
             
     gr.HTML(HTML_SEPARATOR)
     
     # Inputs and outputs
-    with gr.Row(elem_id="input_row"):
+    with gr.Row(equal_height=True,elem_id="input_row"):
         # Input column
-        with gr.Column(scale=1, elem_classes="full_height"):
-            with gr.Row(scale=1, elem_classes="full_height"):
-                with gr.Column(scale=1, elem_classes="full_height filled_flex_display"):
+        with gr.Column(scale=1):
+            with gr.Row(equal_height=True, scale=1):
+                with gr.Column(scale=1, elem_classes="filled_flex_display"):
                     in_compressed_height = gr.Slider(
                         minimum=64,
                         maximum=2048,
@@ -168,6 +174,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                         label="Height",
                         info="Input image height in pixels once resized"
                     )
+                    
                     in_compressed_width = gr.Slider(
                         minimum=64,
                         maximum=2048,
@@ -177,27 +184,27 @@ with gr.Blocks(title="Nifty") as nifty_demo:
                         info="Input image width in pixels once resized"
                     )
                     in_resize_button = gr.Button("Resize", variant="secondary")
-                with gr.Column(scale=1, elem_classes="full_height"):
+                with gr.Column(scale=1):
                     in_img1 = gr.Image(
                         label="Input Image",
                         value="results/red_peppers.jpg",
                         type="filepath",
                         width=256,
                         height=256,
-                        elem_classes="full_height full_width"
+                        elem_classes="full_width"
                     ) 
         
         # Output column
-        with gr.Column(scale=1, elem_classes="full_height"):
-            with gr.Row(scale=1, elem_classes="full_height"):
+        with gr.Column(scale=1):
+            with gr.Row(equal_height=True, scale=1):
                 # The ImageSlider displays the synthesized image on the left (or not if not in debug mode) and the novel areas on the right
-                with gr.Column(scale=1, elem_classes="full_height"):
+                with gr.Column(scale=1):
                     out_img = gr.ImageSlider(
                         label="Output",
                         elem_id="output_image_slider",
-                        elem_classes="full_height full_width"
+                        elem_classes="full_width"
                     )
-                with gr.Column(scale=1, elem_classes="full_height filled_flex_display"):
+                with gr.Column(scale=1, elem_classes="filled_flex_display"):
                     in_height = gr.Slider(
                         minimum=64,
                         maximum=2048,
@@ -219,7 +226,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
     
     gr.HTML(HTML_SEPARATOR)
 
-    with gr.Row():
+    with gr.Row(equal_height=True):
         in_rs = gr.Slider(
                 minimum=0.,
                 maximum=1.,
