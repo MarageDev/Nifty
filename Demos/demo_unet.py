@@ -41,7 +41,7 @@ def train_unet(img_path, save_path, progress=gr.Progress(track_tqdm=True)):
 	train_flow_net((img-mu)/sigma, flow_model, load=False, epochs=10000, show=False, save_name=save_path)
 	progress(1.0, desc="Training complete")
 
-	# Re-enable the Generate button once trained and return success message
+	# Re-enable the Generate button once trained
 	return gr.update(interactive=True)
 
 def load_unet(file_obj):
@@ -56,7 +56,7 @@ def load_unet(file_obj):
 	flow_model.load_state_dict(torch.load(file_obj.name, map_location='cuda'))
 	flow_model.eval().cuda()
 	
-	# Re-enable the Generate button once loaded and update status
+	# Re-enable the Generate button once loaded
 	return gr.update(interactive=True)
 
 # Initialize conditionally so it doesn't freeze the UI waiting to train if missing
