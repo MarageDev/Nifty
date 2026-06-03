@@ -18,6 +18,10 @@ torch.manual_seed(seed)
 MODEL_PATH = "./training/UNet_peppers.pth"
 has_initial_model = os.path.exists(MODEL_PATH)
 
+# Training settings
+training_path = ''
+training_img = None
+
 def train_unet(img_path, save_path, progress=gr.Progress(track_tqdm=True)):
 	if img_path is None:
 		raise gr.Error("Please upload a training image first.")
@@ -113,6 +117,19 @@ def update_pytorch_seed(input_seed):
     global seed
     seed = input_seed
 
+def validate_training():
+	global training_img, training_path
+	if Path(training_path).suffix == '.pth' and training_img is not None :
+		return gr.update(interactive=True) 
+	return gr.update(interactive=False)    
+
+def update_training_path(x):
+    global training_path
+    training_path = x 
+
+def update_training_img(img):
+    global training_img
+    training_img = img
 # Interface
 from Demos.Utilities.theme import *
 
@@ -199,7 +216,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 		with gr.Column(scale=1, elem_classes="full_height filled_flex_display shrink"): gr.HTML(HTML_V_SEPARATOR, elem_classes="full_height")			
 		with gr.Column(scale=1):
 			with gr.Tabs(elem_classes="full_height"):
-				with gr.Tab("Train Model", elem_id="train_tab"):
+				with gr.Tab("Train Model", elem_id="train_tab", elem_classes="full_height"):
 					with gr.Row(equal_height=True):
 						in_img_training = gr.Image(
 						label="Input Image",
@@ -219,8 +236,9 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 					with gr.Row(equal_height=True):
 							training_status = gr.Textbox(placeholder="Training status will appear here...",label="Training Status")
 					with gr.Row(equal_height=True):
-							train_btn_nn = gr.Button("Train NN", variant="primary")
-				with gr.Tab("Load Model", elem_id="load_tab"):
+							train_btn_nn = gr.Button("Train NN", variant="primary", interactive=False)
+							cancel_btn_train = gr.Button("Cancel NN", variant="stop", visible=False)
+				with gr.Tab("Load Model", elem_id="load_tab", elem_classes="full_height"):
 					in_path_model = gr.File(elem_classes="full_size_image", file_count="single", file_types=[".pth"], label="Model file", value=MODEL_PATH if has_initial_model else None)
     
 	gr.HTML(HTML_SEPARATOR)
@@ -253,12 +271,29 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 		outputs=[generate_btn_nifty]
 	)
 
+	# Training conditions
+	in_save_name.change(
+		fn= update_training_path,
+		inputs=[in_save_name],
+	).then(
+		fn=validate_training,
+		outputs=[train_btn_nn]
+	)
+	in_img_training.change(
+		fn = update_training_img,
+		inputs=[in_img_training]
+	).then(
+		fn=validate_training,
+		outputs=[train_btn_nn]
+	)
+ 
 	# Train model : Lock UI + Run Training... After : Unlock UI & Show Status
 	start_train = train_btn_nn.click(
 		fn=lambda: (
-			gr.update(interactive=False, value="Training...")
+			gr.update(interactive=False, value="Training...", visible=False),
+			gr.update(visible=True)
 			),
-		outputs=[train_btn_nn],
+		outputs=[train_btn_nn, cancel_btn_train],
 		queue=False
 	).then(
 		fn=train_unet,
@@ -266,17 +301,28 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 		outputs=[generate_btn_nn,training_status]
 	)
 	start_train.then(
-		fn=lambda: gr.update(interactive=True, value="Train NN"),
-		outputs=[train_btn_nn],
+		fn=lambda: (
+    			gr.update(interactive=True, value="Train NN", visible=True),
+            	gr.update(visible=False)),
+		outputs=[train_btn_nn, cancel_btn_train],
 		queue=False
 	)
-
+	cancel_btn_train.click(
+		fn=lambda: (
+    			gr.update(interactive=True, value="Train NN", visible=True),
+            	gr.update(visible=False)),
+		outputs=[train_btn_nn, cancel_btn_train],
+		cancels=[start_train],
+		queue=False
+	)
+ 
 	# Load model from UI, update UI button state and display status
 	in_path_model.change(
 		fn=load_unet,
 		inputs=[in_path_model],
 		outputs=[generate_btn_nn]
 	)
+ 
 
 	# NN Generation sequence (disable Nifty to avoid OOM)
 	start_nn = generate_btn_nn.click(
