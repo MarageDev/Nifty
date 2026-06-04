@@ -237,7 +237,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 							training_status = gr.Textbox(placeholder="Training status will appear here...",label="Training Status")
 					with gr.Row(equal_height=True):
 							train_btn_nn = gr.Button("Train NN", variant="primary", interactive=False)
-							cancel_btn_train = gr.Button("Cancel NN", variant="stop", visible=False)
+							cancel_btn_train = gr.Button("Cancel Training", variant="stop", visible=False)
 				with gr.Tab("Load Model", elem_id="load_tab", elem_classes="full_height"):
 					in_path_model = gr.File(elem_classes="full_size_image", file_count="single", file_types=[".pth"], label="Model file", value=MODEL_PATH if has_initial_model else None)
     
