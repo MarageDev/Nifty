@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from Nifty.method import *
+import Nifty.method as _nifty_method
 from Nifty.networks import *
 import warnings; warnings.filterwarnings('ignore')
 import gradio as gr
@@ -17,7 +18,7 @@ torch.manual_seed(seed)
 # Check for existing model at startup to handle UI button state
 MODEL_PATH = "./training/UNet_peppers.pth"
 has_initial_model = os.path.exists(MODEL_PATH)
-
+device_used = None
 # Training settings
 training_path = ''
 training_img = None
@@ -35,10 +36,10 @@ def train_unet(img_path, save_path, progress=gr.Progress(track_tqdm=True)):
 	# Train the flow model
 	flow_model = UNet(
 			dim=64,
-			dim_mults=(1, 2)).cuda()
-	print("started training loop")
+			dim_mults=(1, 2)).to(device_used)
+ 
 	progress(0, desc="Starting training loop")
-	train_flow_net((img-mu)/sigma, flow_model, load=False, epochs=10000, show=False, save_name=save_path)
+	train_flow_net((img-mu)/sigma, flow_model, load=False, epochs=10000, show=False, save_name=save_path, device=device_used)
 	progress(1.0, desc="Training complete")
 
 	# Re-enable the Generate button once trained
@@ -51,58 +52,56 @@ def load_unet(file_obj):
 		
 	flow_model = UNet(
 			dim=64,
-			dim_mults=(1, 2)).cuda()
+			dim_mults=(1, 2)).to(device_used)
 	
-	flow_model.load_state_dict(torch.load(file_obj.name, map_location='cuda'))
-	flow_model.eval().cuda()
+	flow_model.load_state_dict(torch.load(file_obj.name, map_location=device_used))
+	flow_model.eval().to(device_used)
 	
 	# Re-enable the Generate button once loaded
 	return gr.update(interactive=True)
 
-# Initialize conditionally so it doesn't freeze the UI waiting to train if missing
-if has_initial_model:
-	flow_model = UNet(dim=64, dim_mults=(1, 2)).cuda()
-	flow_model.load_state_dict(torch.load(MODEL_PATH, map_location='cuda'))
-	flow_model.eval().cuda()
-else:
-	flow_model = None
-
 # Parameters
 def fresh_noise():
-    return torch.randn(1, 3, 256, 256).cuda()
+	return torch.randn(1, 3, 256, 256).to(device_used)
 
 # NN flow
 def flow_nn(image_path, T):
-	torch.manual_seed(seed)
-	img = Tensor_load(image_path).clone()
-	mu, sigma = img.mean(), img.std()
-	if flow_model is None:
-		raise gr.Error("No Neural Network loaded!")
-		
-	noise = fresh_noise()
-	with torch.no_grad():
-		x = noise*1.
-		times=torch.linspace(0, 1, steps=T+1).cuda()
-		for it in range(T):
-			t=times[it]
-			t = t.to(device).unsqueeze(0)
-			flow = flow_model(x,t.view(1))
-			x=x+flow*(times[it+1]-times[it])
+    start = time.time()
+    torch.manual_seed(seed)
+    img = Tensor_load(image_path).clone().to(device_used)
+    mu, sigma = img.mean(), img.std()
+    if flow_model is None:
+        raise gr.Error("No Neural Network loaded!")
+        
+    noise = fresh_noise()
+    with torch.no_grad():
+        x = noise*1.
+        times=torch.linspace(0, 1, steps=T+1).to(device_used)
+        for it in range(T):
+            t=times[it]
+            t = t.to(device_used).unsqueeze(0)
+            flow = flow_model(x,t.view(1))
+            x=x+flow*(times[it+1]-times[it])
 
-			synth_nn_x= x*sigma+mu
-			yield get_synthesized_image(synth_nn_x[...,64:64+128,64:64+128])
+            synth_nn_x= x*sigma+mu
+            yield get_synthesized_image(synth_nn_x[...,64:64+128,64:64+128])
 
-	synth_nn = x*sigma+mu
-	synth_nn=synth_nn[...,64:64+128,64:64+128]
-	yield get_synthesized_image(synth_nn)
+    synth_nn = x*sigma+mu
+    synth_nn=synth_nn[...,64:64+128,64:64+128]
+    print(time.time()-start)
+    yield get_synthesized_image(synth_nn)
 
 def flow_nifty(input_img_path, T, k, rs=1, octaves=1, renoise=0.5):
+	start = time.time()
 	if input_img_path is None:
 		raise gr.Error("No input image loaded")
 	torch.manual_seed(seed)
-	im1 = Tensor_load(input_img_path).clone()
+	im1 = Tensor_load(input_img_path).clone().to(device_used)
+	
 	noise = fresh_noise()
-	return get_synthesized_image(Nifty(im1,rs=rs,T=T,k=k,patchsize=16,stride=4,octaves=octaves,size=(256,256),renoise=renoise,warmup=0,memory=False,noise=noise,show=False,spotsize=1/4,seed=seed,blend=0.,blend_alpha=0.5,blend_map=None))
+	img= get_synthesized_image(Nifty(im1,rs=rs,T=T,k=k,patchsize=16,stride=4,octaves=octaves,size=(128,128),renoise=renoise,warmup=0,memory=False,noise=noise,show=False,spotsize=1/4,seed=seed,blend=0.,blend_alpha=0.5,blend_map=None))
+	print(time.time()-start)
+	return img
 
 def get_synthesized_image(synth):
 	return (synth[0].permute(1, 2, 0).cpu().detach().numpy() * .5 + .5).clip(0, 1).astype(np.float32)
@@ -114,8 +113,8 @@ def restore_nifty_controls():
 	return gr.update(visible=True), gr.update(visible=False), gr.update(interactive=flow_model is not None)
 
 def update_pytorch_seed(input_seed):
-    global seed
-    seed = input_seed
+	global seed
+	seed = input_seed
 
 def validate_training():
 	global training_img, training_path
@@ -124,12 +123,29 @@ def validate_training():
 	return gr.update(interactive=False)    
 
 def update_training_path(x):
-    global training_path
-    training_path = x 
+	global training_path
+	training_path = x 
 
 def update_training_img(img):
-    global training_img
-    training_img = img
+	global training_img
+	training_img = img
+	
+def update_processing_unit_selection(choice:str):
+	global device_used
+	_nifty_method.device = manually_select_device(try_gpu=(choice == "GPU"))
+	device_used = _nifty_method.device
+ 
+selected_processing_unit_type = "GPU" if "cuda" in str(_nifty_method.device) else "CPU"
+device_used = _nifty_method.device
+
+# Initialize conditionally so it doesn't freeze the UI waiting to train if missing
+if has_initial_model:
+	flow_model = UNet(dim=64, dim_mults=(1, 2)).to(device_used)
+	flow_model.load_state_dict(torch.load(MODEL_PATH, map_location=device_used))
+	flow_model.eval().to(device_used)
+else:
+	flow_model = None
+ 
 # Interface
 from Demos.Utilities.theme import *
 
@@ -142,7 +158,15 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 			</p>
 		</div>
 	""" + HTML_AUTHORS)
-	
+	with gr.Row(equal_height=True):
+		in_processing_unit_choice = gr.Radio(
+			label="Mode",
+			choices=["GPU", "CPU"],
+			value=selected_processing_unit_type,
+			type="value",
+			elem_classes="radio_group",
+			elem_id="processing_unit_radio_group"
+		)
 	# Inputs and outputs
 	with gr.Row(equal_height=True):
 		# Input column
@@ -240,9 +264,9 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 							cancel_btn_train = gr.Button("Cancel Training", variant="stop", visible=False)
 				with gr.Tab("Load Model", elem_id="load_tab", elem_classes="full_height"):
 					in_path_model = gr.File(elem_classes="full_size_image", file_count="single", file_types=[".pth"], label="Model file", value=MODEL_PATH if has_initial_model else None)
-    
+	
 	gr.HTML(HTML_SEPARATOR)
-    
+	
 	with gr.Row(equal_height=True,elem_id="output_row"):  
 		with gr.Column(scale=1, elem_classes="output_column"):
 			out_img_nn = gr.Image(
@@ -261,7 +285,7 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 	in_seed.change(
 		fn = update_pytorch_seed,
 		inputs=[in_seed],
-  		outputs=[]
+		  outputs=[]
 	)
 	
 	# Disable/Enable Generate Nifty button if the input image is removed/added
@@ -286,7 +310,12 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 		fn=validate_training,
 		outputs=[train_btn_nn]
 	)
- 
+	# Processing unit
+	in_processing_unit_choice.input(
+		fn = update_processing_unit_selection,
+		inputs=in_processing_unit_choice,
+		outputs=[]
+	)
 	# Train model : Lock UI + Run Training... After : Unlock UI & Show Status
 	start_train = train_btn_nn.click(
 		fn=lambda: (
@@ -302,15 +331,15 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 	)
 	start_train.then(
 		fn=lambda: (
-    			gr.update(interactive=True, value="Train NN", visible=True),
-            	gr.update(visible=False)),
+				gr.update(interactive=True, value="Train NN", visible=True),
+				gr.update(visible=False)),
 		outputs=[train_btn_nn, cancel_btn_train],
 		queue=False
 	)
 	cancel_btn_train.click(
 		fn=lambda: (
-    			gr.update(interactive=True, value="Train NN", visible=True),
-            	gr.update(visible=False)),
+				gr.update(interactive=True, value="Train NN", visible=True),
+				gr.update(visible=False)),
 		outputs=[train_btn_nn, cancel_btn_train],
 		cancels=[start_train],
 		queue=False
@@ -369,7 +398,6 @@ with gr.Blocks(title="Nifty") as nifty_demo:
 		cancels=[start_nifty],
 		queue=False
 	)
- 
 	gr.HTML(HTML_FOOTER)
 
 # Run the Nifty demo (Queue is strictly required for generators/progress/cancel to work)
