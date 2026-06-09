@@ -1,3 +1,4 @@
+# code from Mahé DUVAL
 import sys
 import os
 from pathlib import Path
@@ -397,7 +398,9 @@ def demo_unet():
 			cancels=[start_nifty],
 			queue=False
 		)
-
+	with gr.Accordion(label="Documentation", open=True):
+		with open('Demos/sub_demos/doc/doc_unet.md','r') as f : 
+			gr.Markdown(f.read(),latex_delimiters=[{ "left": "$$", "right": "$$", "display": True },{"left": "$", "right": "$", "display": False},])
 if __name__ == "__main__":
     with gr.Blocks() as demo:
         demo_unet()

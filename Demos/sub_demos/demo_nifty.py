@@ -1,3 +1,4 @@
+# code from Mahé DUVAL
 import sys
 import os
 from pathlib import Path
@@ -160,7 +161,6 @@ def force_stop_loop_f():
 
 # Interface
 from Demos.Utilities.theme import *
-
 
 def demo_nifty():
     # CPU or GPU selection
@@ -373,7 +373,9 @@ def demo_nifty():
             ],
             inputs=[in_img1,in_img2,in_rs,in_T,in_k,in_patch_size,in_stride,in_width,in_height,in_octaves,in_renoise,in_warmup,in_memory,in_seed,in_noise,in_spot_size,in_blend,in_blend_alpha,in_save,in_blend_map, in_seed],
             )
-
+    with gr.Accordion(label="Documentation", open=True):
+        with open('Demos/sub_demos/doc/doc_nifty.md','r') as f : 
+            gr.Markdown(f.read(),latex_delimiters=[{ "left": "$$", "right": "$$", "display": True },{"left": "$", "right": "$", "display": False},])
 if __name__ == "__main__":
     with gr.Blocks() as demo:
         demo_nifty()
