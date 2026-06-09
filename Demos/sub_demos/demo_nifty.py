@@ -3,9 +3,8 @@ import os
 from pathlib import Path
 import time
 
-# Add parent directory to path for imports and file pathsto work from the Demos folder more easily
+# Add parent directory to path for imports and file paths to work from the Demos folder more easily
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 
 import gradio as gr
 import Nifty.method as _nifty_method
@@ -24,55 +23,63 @@ PYTORCH_CUDA_ALLOC_CONF=True
 
 # Functions
 def Nifty_gradio_interface_complete(im1,im2=None,rs=1.,T=100,k=10,patchsize=16,stride=4,width=256,height=256,octaves=4,renoise=.5,warmup=0,memory=True,seed=None,noise=None,spotsize=1/4,blend=False,blend_alpha=0.5,save=True,blend_map=None, manual_noise_seed:int=0):
+    global force_stop_loop
+    force_stop_loop = False
     torch.manual_seed(manual_noise_seed)
     img_1 = Tensor_load(im1)
     img_2 = Tensor_load(im2) if im2 is not None else None
     size = (height, width)
-    try:
-        synth= Nifty(img_1,img_2,rs,T,k,patchsize,stride,size,octaves,renoise,warmup,False,memory,seed,None if noise == 0 else noise,spotsize,blend,blend_alpha,save, torch.tensor([[1,0]]).unsqueeze(0).unsqueeze(0).float().to(_nifty_method.device) if blend_map else None)
 
-        if save:
-            out_path = save_img_to_path(f"./results/demo/synth_{os.path.basename(im1)}_{round(time.time())}.png",synth)
+    synth= Nifty(img_1,img_2,rs,T,k,patchsize,stride,size,octaves,renoise,warmup,False,memory,seed,None if noise == 0 else noise,spotsize,blend,blend_alpha,save, torch.tensor([[1,0]]).unsqueeze(0).unsqueeze(0).float().to(_nifty_method.device) if blend_map else None)
 
-        img_synth = get_synthesized_image(synth)
+    if force_stop_loop:
+        return gr.update(value=None)
 
-        if display_debug_mode:
+    if save:
+        out_path = save_img_to_path(f"./results/demo/synth_{os.path.basename(im1)}_{round(time.time())}.png", synth)
 
-            # Calculate Novelty Map
-            P_exmpl_1 = Patch_extraction(img_1, patchsize=patchsize, stride=1)
-            P_exmpl_2 = Patch_extraction(img_2, patchsize=patchsize, stride=1) if img_2 is not None else None
-            P_synth = Patch_extraction(synth, patchsize=patchsize, stride=1)
-            
-            dist_map, novel_areas = get_nn_distance_map_and_novel_areas(synth, P_exmpl_1, P_exmpl_2, P_synth, patchsize, height, width)
-           
-            return (img_synth, novel_areas), gr.update(interactive=False)
+    img_synth = get_synthesized_image(synth)
 
-        return (img_synth, img_synth), gr.update(interactive=False)
+    if display_debug_mode:
+        # Calculate Novelty Map
+        P_exmpl_1 = Patch_extraction(img_1, patchsize=patchsize, stride=1)
+        P_exmpl_2 = Patch_extraction(img_2, patchsize=patchsize, stride=1) if img_2 is not None else None
+        P_synth = Patch_extraction(synth, patchsize=patchsize, stride=1)
 
-    # Retrieve out of memory errors and clear the cache to not crash + display the input image as output (to avoid crashing)
-    except RuntimeError as e:
-        msg = str(e).lower()
-        if "out of memory" in msg and "cuda" in msg:
-            clear_cuda_cache()
-            fallback_img = get_synthesized_image(img_1)
-            return (fallback_img, fallback_img), gr.update(interactive=True)
-        raise
+        novel_areas = get_nn_distance_map_and_novel_areas(synth, P_exmpl_1, P_exmpl_2, P_synth, patchsize, height, width)
+
+        if force_stop_loop:
+            return gr.update(value=None)
+
+        return (img_synth, novel_areas)
+
+    return (img_synth, img_synth)
+
 
 def clear_cuda_cache():
     if "cuda" in str(_nifty_method.device):
         torch.cuda.empty_cache()
-    return gr.update(interactive=False)
+        gr.Info("Cache cleared")
+
 
 def get_synthesized_image(synth):
     return (synth[0].permute(1, 2, 0).cpu().numpy() * .5 + .5).clip(0, 1).astype(np.float32)
 
+
 def get_nn_distance_map_and_novel_areas(synth, P_exmpl1,P_exmpl2, P_synth, patchsize, H, W):
+    global force_stop_loop
+
     N = P_synth.size(2)
     ld, lind = [], []
     
     for i in tqdm(range(N//5000+1)): # chunk by chunk for NN search, for memor
-
+        if force_stop_loop : 
+            return [], []
         X1 = P_exmpl1[:,:,:]
+
+
+
+
         X1 = X1.squeeze(0)
         
         if P_exmpl2 is not None: # if there's a second reference image, concatenate its patches to the first one for the NN search
@@ -87,6 +94,8 @@ def get_nn_distance_map_and_novel_areas(synth, P_exmpl1,P_exmpl2, P_synth, patch
         Y2 = (Y**2).sum(0).unsqueeze(0) 
         D = Y2.transpose(1,0) - 2 * torch.matmul(Y.transpose(1,0),X1) + X1_2 
         Dnn,indnn=torch.min(D,dim=1)  # indnn: index of nearest ref patch for each synth patch (not used because no displacement map), and Dnn the distance
+
+
         ld.append(Dnn.cpu())
 
     Dnn=torch.cat(ld)
@@ -106,20 +115,24 @@ def get_nn_distance_map_and_novel_areas(synth, P_exmpl1,P_exmpl2, P_synth, patch
 
 
 
+
     novel_areas = (novelty[0].permute(1, 2, 0).cpu().numpy() * .5 + .5).clip(0, 1).astype(np.float32)
 
+    force_stop_loop = False
 
-    return [], novel_areas
+    return novel_areas
 
 
-def save_img_to_path(file_path, synthetized_image)->str:    
+def save_img_to_path(file_path, synthetized_image) -> str:
     plt.imsave(file_path, get_synthesized_image(synthetized_image))
     return file_path
 
-def update_processing_unit_selection(choice:str):
+
+def update_processing_unit_selection(choice: str):
     _nifty_method.device = manually_select_device(try_gpu=(choice == "GPU"))
 
-def resize_input_image(image_path:str, width:int, height:int)->str:
+
+def resize_input_image(image_path: str, width: int, height: int) -> str:
     img = Image.open(image_path)
     img_resized = img.resize((width, height))
     os.makedirs("./results/demo/resized/", exist_ok=True)
@@ -127,18 +140,27 @@ def resize_input_image(image_path:str, width:int, height:int)->str:
     img_resized.save(resized_image_path)
     return resized_image_path
 
-def update_output_display_mode(debug_mode_enabled:bool):
+
+def update_output_display_mode(debug_mode_enabled: bool):
     global display_debug_mode
     display_debug_mode = debug_mode_enabled
+
 
 # Initialize processing unit selection
 selected_processing_unit_type = "GPU" if "cuda" in str(_nifty_method.device) else "CPU"
 
 display_debug_mode = False
+force_stop_loop = False
+
+
+def force_stop_loop_f():
+    global force_stop_loop
+    force_stop_loop = True
 
 
 # Interface
 from Demos.Utilities.theme import *
+
 
 def demo_nifty():
     # CPU or GPU selection
@@ -155,11 +177,11 @@ def demo_nifty():
                 )
             with gr.Column(scale=1, elem_classes="filled_flex_display"):
                 in_debug_mode = gr.Checkbox(label="Debug Mode", value=False, info="Enable debug mode to display novelty areas on the output, which can help to understand and analyze the synthesis process, but is much slower and more memory consuming")
-                
+
         gr.HTML(HTML_SEPARATOR)
-        
+
         # Inputs and outputs
-        with gr.Row(equal_height=True,elem_id="input_row"):
+        with gr.Row(equal_height=True, elem_id="input_row"):
             # Input column
             with gr.Column(scale=1):
                 with gr.Row(equal_height=True, scale=1):
@@ -172,7 +194,7 @@ def demo_nifty():
                             label="Height",
                             info="Input image height in pixels once resized"
                         )
-                        
+
                         in_compressed_width = gr.Slider(
                             minimum=64,
                             maximum=2048,
@@ -190,8 +212,8 @@ def demo_nifty():
                             width=256,
                             height=256,
                             elem_classes="full_width"
-                        ) 
-            
+                        )
+
             # Output column
             with gr.Column(scale=1):
                 with gr.Row(equal_height=True, scale=1):
@@ -218,17 +240,18 @@ def demo_nifty():
                             step=64,
                             label="Width",
                             info="Output image width in pixels"
-                        )     
+                        )
                         submit_btn = gr.Button("Generate", variant="primary")
-                        in_clear_cache = gr.Button("Clear CUDA Cache", variant="stop", interactive=False)
-        
+                        cancel_btn_nifty = gr.Button("Cancel", variant="stop", visible=False)
+                        in_clear_cache = gr.Button("Clear CUDA Cache", variant="stop", interactive=True)
+
         gr.HTML(HTML_SEPARATOR)
 
         with gr.Row(equal_height=True):
             in_rs = gr.Slider(
                     minimum=0.,
                     maximum=1.,
-                    value=1., 
+                    value=1.,
                     step=0.01,
                     label="Ratio Sample",
                     info="Ratio of the reference patches to sample at each step"
@@ -265,56 +288,68 @@ def demo_nifty():
                 label="Renoise",
                 info="Time used renoise the smooth upsampled image at each resolution"
                 )
-        
-        
+
         # Blending inputs
         with gr.Accordion("Blending Inputs", open=False):
-                    in_img2 = gr.Image(label="Blend Image (optional)",type="filepath") 
+                    in_img2 = gr.Image(label="Blend Image (optional)",type="filepath")
                     in_blend = gr.Checkbox(value=False, label="Blend", info="Blend the synthesized image with the input image, which can help to preserve some of the structure of the input image")
                     in_blend_alpha = gr.Slider(minimum=0, maximum=1, value=0.5, step=0.01, label="Blend Alpha", info="Alpha used for blending the synthesized image with the input image, if blending is enabled")
                     in_blend_map = gr.Checkbox(label="Blend Map", info="Use a blending map for blending the two images (if not enabled, the blending is uniform across the image). For the demo it is set to : `torch.tensor([[1,0]]).unsqueeze(0).unsqueeze(0).float().to(device)`")
-        
-        
+
         # Optional/Advanced inputs
         with gr.Accordion("Advanced Inputs", open=False):
-                    
                     in_patch_size = gr.Slider(minimum=1, maximum=50, value=16, step=1, label="Patch Size")
                     in_stride = gr.Slider(minimum=0, maximum=999999, value=4, step=1, label="Stride")
-                    
+
                     in_warmup = gr.Slider(minimum=0, maximum=100, value=0, step=1, label="Warmup", info="Number of initial steps during which the flow is not applied, which can help to stabilize the synthesis at the beginning")
-                    in_memory = gr.Checkbox(value=False,label="Memory", info="Use the memory efficient version of Nifty, which does not store all the intermediate synthesized images during the flow integration, but only the current one")
+                    in_memory = gr.Checkbox(value=False, label="Memory", info="Use the memory efficient version of Nifty, which does not store all the intermediate synthesized images during the flow integration, but only the current one")
                     in_seed = gr.Slider(minimum=0, maximum=999999, value=0, step=1, label="Seed")
-                    in_noise = gr.Checkbox(value = None,label="Noise", info="Add noise during the synthesis, which can help to escape local minima and produce more diverse results")
+                    in_noise = gr.Checkbox(value=None, label="Noise", info="Add noise during the synthesis, which can help to escape local minima and produce more diverse results")
                     in_spot_size = gr.Slider(minimum=1/4, maximum=1, value=0.25, step=0.01, label="Spot Size", info="Size of the spots used for the synthesis, as a ratio of the patch size")
-                    in_save = gr.Checkbox(value=False,label="Save", info="Save the synthesized image at the end of the synthesis")
-        
+                    in_save = gr.Checkbox(value=False, label="Save", info="Save the synthesized image at the end of the synthesis")
+
         in_clear_cache.click(
             fn=clear_cuda_cache,
             inputs=[],
-            outputs=[in_clear_cache]
+            outputs=[]
         )
 
         in_resize_button.click(
-            fn = resize_input_image,
-            inputs = [in_img1, in_compressed_width, in_compressed_height],
-            outputs = in_img1
+            fn=resize_input_image,
+            inputs=[in_img1, in_compressed_width, in_compressed_height],
+            outputs=in_img1
         )
 
         # Bind the click event to the function
-        submit_btn.click(
+        process_nifty = submit_btn.click(
+            fn = lambda : (gr.update(visible=False), gr.update(visible=True)),
+            outputs = [submit_btn, cancel_btn_nifty]
+        ).then(
             fn=Nifty_gradio_interface_complete,
-            inputs = [in_img1,in_img2,in_rs,in_T,in_k,in_patch_size,in_stride,in_width,in_height,in_octaves,in_renoise,in_warmup,in_memory,in_seed,in_noise,in_spot_size,in_blend,in_blend_alpha,in_save,in_blend_map, in_seed],
-            outputs = [out_img, in_clear_cache],
+            inputs=[in_img1, in_img2, in_rs, in_T, in_k, in_patch_size, in_stride, in_width, in_height, in_octaves, in_renoise, in_warmup, in_memory, in_seed, in_noise, in_spot_size, in_blend, in_blend_alpha, in_save, in_blend_map, in_seed],
+            outputs=[out_img],
+        ).then(
+            fn = lambda : (gr.update(visible=True), gr.update(visible=False)),
+            outputs = [submit_btn, cancel_btn_nifty]
         )
 
         in_processing_unit_choice.input(
-            fn = update_processing_unit_selection,
+            fn=update_processing_unit_selection,
             inputs=in_processing_unit_choice,
             outputs=[]
         )
         in_debug_mode.change(
             fn=update_output_display_mode,
             inputs=in_debug_mode,
+        )
+        cancel_btn_nifty.click(
+            fn=force_stop_loop_f,
+            inputs=[],
+            outputs=[],
+            cancels=[process_nifty]
+        ).then(
+            fn = lambda : (gr.update(visible=True), gr.update(visible=False)),
+            outputs = [submit_btn, cancel_btn_nifty]
         )
         gr.Examples(
             label="Examples (Click to load the parameters) - Published in the paper and more",
